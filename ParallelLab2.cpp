@@ -3,8 +3,11 @@
 #include <chrono>
 #include <ctime>
 #include <thread>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 
 using namespace std;
+using namespace cv;
 
 const int gSize = 3;
 double gFilter[gSize][gSize] =
@@ -14,13 +17,13 @@ double gFilter[gSize][gSize] =
 
 int threadNum = thread::hardware_concurrency();
 
-const int sizeX = 10;
-const int sizeY = 10;
+const int sizeX = 1024;
+const int sizeY = 768;
 const int channels = 3;
 
 const int m_size = 1024;
 
-void fill_image(int m[sizeX][sizeY][channels]);
+void fill_image(int*** m);
 
 void fill_matrix(int matrix[m_size][m_size]);
 void scalar_multiplication(int a[m_size][m_size], int b[m_size][m_size], int c[m_size][m_size]);
@@ -70,94 +73,72 @@ private:
 };
 
 int main() {
-	cout << "Number of threads: " << threadNum << "\n";
+	bool task1(1),
+		task2(0);
 
-	int image[sizeX][sizeY][channels];
-	fill_image(image);
+	// ====== task 1 ======
+	if (task1) {
+		int i, j, k, x, y;
 
-	for (int i = 0; i < 10; i++) {
-		cout << image[i][0][1] << " ";
-	}
-	cout << "\n";
+		cout << "Number of threads: " << threadNum << "\n";
 
-	int i, j, k, x, y;
-	int buffer = 0;
+		//int image[sizeX][sizeY][channels];
 
-	const int radius = gSize - 1;
-	const int intenX = sizeX + radius;
-	const int intenY = sizeY + radius;
-
-	int intensity[intenX][intenY]{ 0 };
-	
-	for (i = 0; i < sizeX; i++) {
-		for (j = 0; j < sizeY; j++) {
-			for (k = 0; k < channels; k++) {
-				image[i][j][k] = (sizeX) * (sizeX - 1) * i + (sizeY - 1) * j + k;
+		int*** image = new int** [sizeX]();
+		for (i = 0; i < sizeX; ++i) {
+			image[i] = new int* [sizeY]();
+			for (j = 0; j < sizeY; ++j) {
+				image[i][j] = new int[channels]();
 			}
 		}
-	}
 
-	//вывод сгенерированной матрицы
-	//cout << "Generated matrix\n";
-	//for (i = 0; i < sizeX; i++) {
-	//	for (j = 0; j < sizeY; j++) {
-	//		for (k = 0; k < channels; k++) {
-	//			cout << image[i][j][k] << " ";
-	//		}
-	//		cout << "| ";
-	//	}
-	//	cout << "\n";
-	//}
+		fill_image(image);
 
-	for (i = 1; i < intenX - 1; i++) {
-		for (j = 1; j < intenY - 1; j++) {
-			for (k = 0; k < channels; k++) {
-				intensity[i][j] += image[i - 1][j - 1][k];
-			}
-			intensity[i][j] /= 3;
-		}
-	}
-	
-	//вывод матрицы интенсивности
-	//cout << "Intensity matrx\n";
-	//for (i = 0; i < intenX; i++) {
-	//	for (j = 0; j < intenY; j++) {
-	//		cout << intensity[i][j] << " ";
-	//	}
-	//	cout << "\n";
-	//}
+		const int radius = gSize - 1;
+		const int intenX = sizeX + radius;
+		const int intenY = sizeY + radius;
 
-	for (i = 1; i < intenX - 1; i++) {
-		for (j = 1; j < intenY - 1; j++) {
-			for (x = -1; x < gSize - 1; x++) {
-				for (y = -1; y < gSize - 1; y++) {
-					buffer += intensity[i + x][j + y] * gFilter[1 + x][1 + y];
+		int intensity[intenX][intenY]{ 0 };
+		int resultImage[sizeX][sizeY]{ 0 };
+
+		//заполнение матрицы интенсивности
+		for (i = 1; i < intenX - 1; i++) {
+			for (j = 1; j < intenY - 1; j++) {
+				for (k = 0; k < channels; k++) {
+					intensity[i][j] += image[i - 1][j - 1][k];
 				}
-			}	
-			intensity[i][j] = buffer;
-			buffer = 0;
+				intensity[i][j] /= 3;
+			}
 		}
-	}
 
-	//вывод матрицы с наложением фильтра
-	cout << "Filtered matrix\n";
-	for (i = 0; i < intenX; i++) {
-		for (j = 0; j < intenY; j++) {
-			cout << intensity[i][j] << " ";
+		//наложение фильтра
+		for (i = 1; i < intenX - 1; i++) {
+			for (j = 1; j < intenY - 1; j++) {
+				for (x = -1; x < gSize - 1; x++) {
+					for (y = -1; y < gSize - 1; y++) {
+						resultImage[i - 1][j - 1] += intensity[i + x][j + y] * gFilter[1 + x][1 + y];
+					}
+				}
+			}
 		}
-		cout << "\n";
+
+		//вывод матрицы с наложением фильтра
+		cout << "Filtered matrix\n";
+		for (i = 0; i < sizeX; i++) {
+			for (j = 0; j < sizeY; j++) {
+				cout << resultImage[i][j] << " ";
+			}
+			cout << "\n";
+		}
+
+		string image_path = "D:/ttv/картинки/bob.png";
+		Mat img = imread(image_path, IMREAD_COLOR);
+
+		imshow("Display window", img);
+		int k = waitKey(0); // Wait for a keystroke in the window
 	}
-
-	//for (i = 0; i < sizeX; i++) {
-	//	for (j = 0; j < sizeY; j++) {
-	//		for (k = 0; k < channels; k++) {
-
-	//		}
-	//	}
-	//}
-
+ 
 	// ====== task 2 ======
-
 	//int m_A[m_size][m_size];
 	//int m_B[m_size][m_size];
 	//int m_ScalarSingle[m_size][m_size];
@@ -186,7 +167,7 @@ int main() {
 	//}
 }
 
-void fill_image(int m[sizeX][sizeY][channels]) {
+void fill_image(int*** m) {
 	int i, j, k;
 	for (i = 0; i < sizeX; i++) {
 		for (j = 0; j < sizeY; j++) {
