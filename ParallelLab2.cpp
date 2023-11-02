@@ -5,223 +5,256 @@
 #include <thread>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/core/utils/logger.hpp>
 
-using namespace std;
 using namespace cv;
-
-const int gSize = 3;
-double gFilter[gSize][gSize] =
-{ 1 / 16.0, 2 / 16.0, 1 / 16.0,
-  2 / 16.0, 4 / 16.0, 2 / 16.0,
-  1 / 16.0, 2 / 16.0, 1 / 16.0 };
+using namespace std;
 
 int threadNum = thread::hardware_concurrency();
 
-const int sizeX = 1024;
-const int sizeY = 768;
-const int channels = 3;
+vector<vector<double>> gFilter{
+	{ 1 / 16.0, 2 / 16.0, 1 / 16.0 },
+	{ 2 / 16.0, 4 / 16.0, 2 / 16.0 },
+	{ 1 / 16.0, 2 / 16.0, 1 / 16.0 } };
+int gSize = gFilter.size() - 1;
 
-const int m_size = 1024;
-
-void fill_image(int*** m);
-
-void fill_matrix(int matrix[m_size][m_size]);
-void scalar_multiplication(int a[m_size][m_size], int b[m_size][m_size], int c[m_size][m_size]);
-void compare_matrices(int a[m_size][m_size], int b[m_size][m_size]);
-void transpose(int a[m_size][m_size]);
-
-class Timer
-{
-public:
-	void start()
-	{
-		m_StartTime = chrono::system_clock::now();
-		m_bRunning = true;
+void process_image(string image_name) {
+	Mat input = imread(image_name);
+	Mat inputGray;
+	cvtColor(input, inputGray, COLOR_BGR2GRAY);
+	if (input.empty()) {
+		cout << "Image error\n";
 	}
-
-	void stop()
-	{
-		m_EndTime = chrono::system_clock::now();
-		m_bRunning = false;
-	}
-
-	double elapsedMilliseconds()
-	{
-		chrono::time_point<chrono::system_clock> endTime;
-
-		if (m_bRunning)
-		{
-			endTime = chrono::system_clock::now();
-		}
-		else
-		{
-			endTime = m_EndTime;
-		}
-
-		return chrono::duration_cast<chrono::milliseconds>(endTime - m_StartTime).count();
-	}
-
-	double elapsedSeconds()
-	{
-		return elapsedMilliseconds() / 1000.0;
-	}
-
-private:
-	chrono::time_point<chrono::system_clock> m_StartTime;
-	chrono::time_point<chrono::system_clock> m_EndTime;
-	bool                                               m_bRunning = false;
-};
-
-int main() {
-	bool task1(1),
-		task2(0);
-
-	// ====== task 1 ======
-	if (task1) {
-		int i, j, k, x, y;
-
-		cout << "Number of threads: " << threadNum << "\n";
-
-		//int image[sizeX][sizeY][channels];
-
-		int*** image = new int** [sizeX]();
-		for (i = 0; i < sizeX; ++i) {
-			image[i] = new int* [sizeY]();
-			for (j = 0; j < sizeY; ++j) {
-				image[i][j] = new int[channels]();
-			}
-		}
-
-		fill_image(image);
-
-		const int radius = gSize - 1;
-		const int intenX = sizeX + radius;
-		const int intenY = sizeY + radius;
-
-		int intensity[intenX][intenY]{ 0 };
-		int resultImage[sizeX][sizeY]{ 0 };
-
-		//заполнение матрицы интенсивности
-		for (i = 1; i < intenX - 1; i++) {
-			for (j = 1; j < intenY - 1; j++) {
-				for (k = 0; k < channels; k++) {
-					intensity[i][j] += image[i - 1][j - 1][k];
-				}
-				intensity[i][j] /= 3;
-			}
-		}
-
-		//наложение фильтра
-		for (i = 1; i < intenX - 1; i++) {
-			for (j = 1; j < intenY - 1; j++) {
-				for (x = -1; x < gSize - 1; x++) {
-					for (y = -1; y < gSize - 1; y++) {
-						resultImage[i - 1][j - 1] += intensity[i + x][j + y] * gFilter[1 + x][1 + y];
+	Mat output = Mat::zeros(input.size(), CV_8UC1);
+	for (int i = 0; i < input.rows; i++) {
+		for (int j = 0; j < input.cols; j++) {
+			uchar buff = 0;
+			for (int x = -1; x < gSize; x++) {
+				for (int y = -1; y < gSize; y++) {
+					if (!(i + x < 0 || j + y < 0 || i + x >(input.rows - 1) || j + y >(input.cols - 1))) {
+						Vec3b inputPixel = input.at<Vec3b>(i + x, j + y);
+						buff += inputPixel[0] * gFilter.at(x + 1).at(y + 1);
 					}
 				}
 			}
-		}
-
-		//вывод матрицы с наложением фильтра
-		cout << "Filtered matrix\n";
-		for (i = 0; i < sizeX; i++) {
-			for (j = 0; j < sizeY; j++) {
-				cout << resultImage[i][j] << " ";
-			}
-			cout << "\n";
-		}
-
-		string image_path = "D:/ttv/картинки/bob.png";
-		Mat img = imread(image_path, IMREAD_COLOR);
-
-		imshow("Display window", img);
-		int k = waitKey(0); // Wait for a keystroke in the window
-	}
- 
-	// ====== task 2 ======
-	//int m_A[m_size][m_size];
-	//int m_B[m_size][m_size];
-	//int m_ScalarSingle[m_size][m_size];
-
-	//cout << "Matrix size: " << m_size << endl;
-	//cout << "Creating matrices..." << endl;
-	//fill_matrix(m_A);
-	//fill_matrix(m_B);
-	//cout << "Matrices are created" << endl;
-
-	//double timeScalarSingle;
-
-	//bool scalarSingle(0);
-
-	//double imageCount(10.0),
-	//	overallTime(0.0);
-
-	//Timer timer;
-	//if (scalarSingle) {
-	//	cout << "Multiplying matrices (scalar, single thread)..." << endl;
-	//	timer.start();
-	//	scalar_multiplication(m_A, m_B, m_ScalarSingle);
-	//	timer.stop();
-	//	cout << "Scalar (single) multiplication is done: " << timer.elapsedSeconds() << " seconds" << endl;
-	//	timeScalarSingle = timer.elapsedSeconds();
-	//}
-}
-
-void fill_image(int*** m) {
-	int i, j, k;
-	for (i = 0; i < sizeX; i++) {
-		for (j = 0; j < sizeY; j++) {
-			for (k = 0; k < channels; k++) {
-				m[i][j][k] = rand() % 256;
-			}
+			output.at<uchar>(i, j) = static_cast <uchar>(buff);
 		}
 	}
+	imwrite("blur_" + image_name, output);
 }
-
-void fill_matrix(int matrix[m_size][m_size]) {
-	int i, j;
-	for (i = 0; i < m_size; i++) {
-		for (j = 0; j < m_size; j++) {
-			matrix[i][j] = rand() % 5;
-		}
+void process_image_OMP(string image_name) {
+	Mat input = imread(image_name);
+	Mat inputGray;
+	cvtColor(input, inputGray, COLOR_BGR2GRAY);
+	if (input.empty()) {
+		cout << "Image error\n";
 	}
-}
-void scalar_multiplication(int a[m_size][m_size], int b[m_size][m_size], int c[m_size][m_size]) {
-	int i, j, k;
-	for (i = 0; i < m_size; i++) {
-		for (j = 0; j < m_size; j++) {
-			for (k = 0; k < m_size; k++) {
-				c[i][j] += a[i][k] * b[k][j];
-			}
-		}
-		//if (i % 256 == 0) {
-		//    cout << "current i (scalar): " << i << endl;
-		//}
-	}
-}
-void compare_matrices(int a[m_size][m_size], int b[m_size][m_size]) {
-	int i, j;
-	int errors = 0;
-	for (i = 0; i < m_size; i++) {
-		for (j = 0; j < m_size; j++) {
-			if (a[i][j] != b[i][j]) {
-				errors++;
-				//cout << "Elems: " << a[i][j] << " " << b[i][j] << endl;
-				//cout << "i = " << i << " ,j = " << j << endl;
-			}
-		}
-	}
-	cout << "Error count: " << errors << endl;
-}
-void transpose(int a[m_size][m_size]) {
-	int i, j, t;
-	for (i = 0; i < m_size; ++i)
+	Mat output = Mat::zeros(input.size(), CV_8UC1);
+	#pragma omp parallel
 	{
-		for (j = i; j < m_size; ++j)
-		{
-			t = a[i][j];
-			a[i][j] = a[j][i];
-			a[j][i] = t;
+		#pragma omp for
+		for (int i = 0; i < input.rows; i++) {
+			for (int j = 0; j < input.cols; j++) {
+				uchar buff = 0;
+				for (int x = -1; x < gSize; x++) {
+					for (int y = -1; y < gSize; y++) {
+						if (!(i + x < 0 || j + y < 0 || i + x >(input.rows - 1) || j + y >(input.cols - 1))) {
+							Vec3b inputPixel = input.at<Vec3b>(i + x, j + y);
+							buff += inputPixel[0] * gFilter.at(x + 1).at(y + 1);
+						}
+					}
+				}
+				output.at<uchar>(i, j) = static_cast <uchar>(buff);
+			}
+		}
+	}
+	imwrite("blur_" + image_name, output);
+}
+void print_resolution(string image_name) {
+	Mat input = imread(image_name);
+	cout << "Picture's resolution: " << input.cols << "x" << input.rows << "\n";
+}
+
+uint32_t** create_empty(int size) {
+	uint32_t** m = new uint32_t*[size];
+	for (int i = 0; i < size; ++i) {
+		m[i] = new uint32_t[size];
+		for (int j = 0; j < size; ++j) {
+			m[i][j] = 0;
+		}
+	}
+	return m;
+}
+uint32_t** create_random(int size) {
+	uint32_t** m = new uint32_t * [size];
+	for (int i = 0; i < size; ++i) {
+		m[i] = new uint32_t[size];
+		for (int j = 0; j < size; ++j) {
+			m[i][j] = rand() % 5;
+		}
+	}
+	return m;
+}
+void print_matrix(uint32_t** m, int size) {
+	for (int i = 0; i < size; i++) {
+		for (int j = 0; j < size; j++) {
+			cout << m[i][j] << " ";
+		}
+		cout << "\n";
+	}
+	cout << "\n\n";
+}
+void multiply_matrices(uint32_t** res, uint32_t** mA, uint32_t** mB, int size) {
+	for (int i = 0; i < size; ++i) {
+		for (int j = 0; j < size; ++j) {
+			for (int k = 0; k < size; k++) {
+				res[i][j] += mA[i][k] * mB[k][j];
+			}
+		}
+	}
+}
+void multiply_matrices_OMP(uint32_t** res, uint32_t** mA, uint32_t** mB, int size) {
+	#pragma omp parallel
+	{
+		#pragma omp for
+		for (int i = 0; i < size; ++i) {
+			for (int j = 0; j < size; ++j) {
+				for (int k = 0; k < size; k++) {
+					res[i][j] += mA[i][k] * mB[k][j];
+				}
+			}
+		}
+	}
+
+}
+bool check_equality(uint32_t** mA, uint32_t** mB, int size) {
+	for (int i = 0; i < size; i++) {
+		for (int j = 0; j < size; j++) {
+			if (mA[i][j] != mB[i][j]) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+int main() {
+	utils::logging::setLogLevel(cv::utils::logging::LogLevel::LOG_LEVEL_SILENT);
+
+	#ifdef _OPENMP
+		cout << ("OpenMP is supported!\n");
+	#endif
+	#ifndef _OPENMP
+		cout << ("OpenMP is NOT supported!\n");
+		return 0;
+	#endif
+	cout << "Number of threads: " << threadNum << "\n";
+	omp_set_num_threads(threadNum);
+
+	bool singleThread(1), multiThread(1);
+	bool task1(0), task2(1);
+
+	//Mat input = imread("mountain.png");
+	//Mat inputGray;
+	//cvtColor(input, inputGray, COLOR_BGR2GRAY);
+	//imshow("Input", input);
+	//imshow("Output", inputGray);
+	//int o = waitKey(0);
+
+	if (task1) {
+		int testCount = 10;
+		double avgTime = 0;
+		vector<string> pictures{ "mountain.png", "city.png", "desert.png"};
+		vector<double> timeResult;
+		auto iter{ pictures.begin() };
+		while (iter != pictures.end()) {
+			print_resolution(*iter);
+			cout << "Image process test (no OMP)\n";
+			for (int test = 0; test < testCount; test++) {
+				auto t_start = omp_get_wtime();
+				process_image(*iter);
+				auto t_end = omp_get_wtime();
+				avgTime += t_end - t_start;
+				cout << "Attempt " << test + 1 << ", time: " << t_end - t_start << " seconds\n";
+			}
+			cout << "Average time is " << avgTime / testCount << " seconds\n\n";
+			timeResult.push_back(avgTime / testCount);
+			avgTime = 0;
+
+			cout << "Image process test (with OMP)\n";
+			for (int test = 0; test < testCount; test++) {
+				auto t_start = omp_get_wtime();
+				process_image_OMP(*iter);
+				auto t_end = omp_get_wtime();
+				avgTime += t_end - t_start;
+				cout << "Attempt " << test + 1 << ", time: " << t_end - t_start << " seconds\n";
+			}
+			cout << "Average time is " << avgTime / testCount << " seconds\n\n";
+			timeResult.push_back(avgTime / testCount);
+			avgTime = 0;
+
+			++iter;
+		}
+		cout << "Results table\n";
+		for (int i = 0; i < timeResult.size() / 2; i++) {
+			cout << "Picture #" << i + 1 << ": " << timeResult.at(2 * i) << " | " << timeResult.at(2 * i + 1) << " | " << timeResult.at(2 * i) / timeResult.at(2 * i + 1) << "\n";
+		}
+	}
+
+	if (task2) {
+		int m_size = 4096;
+		cout << "Matrix size: " << m_size << "x" << m_size << "\n";
+		int testCount = 10;
+		double avgTime = 0;
+		uint32_t** no_thr_res = create_empty(m_size);
+		uint32_t** multi_thr_res = create_empty(m_size);
+		vector<double> timeResult;
+		uint32_t** mA = create_random(m_size);
+		uint32_t** mB = create_random(m_size);
+
+		cout << "Matrix multiplication test (no OMP)\n";
+		for (int test = 0; test < testCount; test++) {
+			uint32_t** mRes = create_empty(m_size);
+			auto t_start = omp_get_wtime();
+			multiply_matrices(mRes, mA, mB, m_size);
+			auto t_end = omp_get_wtime();
+			avgTime += t_end - t_start;
+			cout << "Attempt " << test + 1 << ", time: " << t_end - t_start << " seconds\n";
+			if (test == testCount - 1) {
+				no_thr_res = mRes;
+			}
+		}
+		cout << "Average time is " << avgTime / testCount << " seconds\n\n";
+		timeResult.push_back(avgTime / testCount);
+		avgTime = 0;
+
+		cout << "Matrix multiplication test (with OMP)\n";
+		for (int test = 0; test < testCount; test++) {
+			uint32_t** mRes = create_empty(m_size);
+			auto t_start = omp_get_wtime();
+			multiply_matrices_OMP(mRes, mA, mB, m_size);
+			auto t_end = omp_get_wtime();
+			avgTime += t_end - t_start;
+			cout << "Attempt " << test + 1 << ", time: " << t_end - t_start << " seconds\n";
+			if (test == testCount - 1) {
+				multi_thr_res = mRes;
+			}
+		}
+		cout << "Average time is " << avgTime / testCount << " seconds\n\n";
+		timeResult.push_back(avgTime / testCount);
+		avgTime = 0;
+
+		//print_matrix(no_thr_res, m_size);
+		//print_matrix(multi_thr_res, m_size);
+
+		bool are_equal = check_equality(no_thr_res, multi_thr_res, m_size);
+		if (are_equal) { cout << "Matrices are equal\n"; }
+		else { cout << "Matrices are NOT equal\n"; }
+
+		cout << "Results table\n";
+		for (int i = 0; i < timeResult.size() / 2; i++) {
+			cout << "Multiplication #" << i + 1 << ": " << timeResult.at(2 * i) << " | " << timeResult.at(2 * i + 1) << " | " << timeResult.at(2 * i) / timeResult.at(2 * i + 1) << "\n";
 		}
 	}
 }
